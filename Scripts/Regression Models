@@ -1,0 +1,71 @@
+## 1. Regression Models ##
+## Importing all necessary libraries ##
+import pandas as pd
+import numpy as np
+from sklearn.datasets import fetch_openml
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import ElasticNet
+from sklearn.metrics import r2_score, mean_squared_error
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+## Load in Dataset from OpenML ##
+heart_data = fetch_openml(name="heart-disease", version=1, as_frame=True)
+df = heart_data.frame
+
+## Preprocessing Data ##
+df = df.dropna(subset=['chol'])  # Dropping the rows with missing cholesterol values #
+
+## Features and target ##
+X = df.drop(columns=['chol'])  # To predict cholesterol #
+y = df['chol']
+
+## One-hot encode categorical variables ##
+X = pd.get_dummies(X, drop_first=True)
+
+## Train-test split ##
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+## Train ElasticNet Models Across Hyperparameters ##
+alphas = np.logspace(-2, 1, 5)         # e.g., [0.01, 0.1, 1, 10]
+l1_ratios = np.linspace(0.1, 1.0, 5)   # e.g., [0.1, 0.325, ..., 1.0]
+
+results_r2 = pd.DataFrame(index=alphas, columns=l1_ratios)
+results_rmse = pd.DataFrame(index=alphas, columns=l1_ratios)
+
+for alpha in alphas:
+    for l1_ratio in l1_ratios:
+        model = ElasticNet(alpha=alpha, l1_ratio=l1_ratio, random_state=42)
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+
+        r2 = r2_score(y_test, y_pred)
+        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+
+        results_r2.loc[alpha, l1_ratio] = r2
+        results_rmse.loc[alpha, l1_ratio] = rmse
+
+## Plotting the Heatmaps ##
+plt.figure(figsize=(8, 6))
+sns.heatmap(results_r2.astype(float), annot=True, fmt=".2f", cmap="YlGnBu")
+plt.title("R² Score for ElasticNet")
+plt.xlabel("l1_ratio")
+plt.ylabel("alpha")
+plt.show()
+
+plt.figure(figsize=(8, 6))
+sns.heatmap(results_rmse.astype(float), annot=True, fmt=".2f", cmap="YlOrRd", cbar_kws={'label': 'RMSE'})
+plt.title("RMSE for ElasticNet")
+plt.xlabel("l1_ratio")
+plt.ylabel("alpha")
+plt.show()
+
+## Identifying the best configuration ##
+best_r2 = results_r2.astype(float).max().max()
+best_rmse = results_rmse.astype(float).min().min()
+
+best_alpha_r2, best_l1_r2 = np.where(results_r2.astype(float) == best_r2)
+best_alpha_rmse, best_l1_rmse = np.where(results_rmse.astype(float) == best_rmse)
+
+print(f"\n Best R²: {best_r2:.3f} at alpha={results_r2.index[best_alpha_r2[0]]}, l1_ratio={results_r2.columns[best_l1_r2[0]]}")
+print(f" Best RMSE: {best_rmse:.3f} at alpha={results_rmse.index[best_alpha_rmse[0]]}, l1_ratio={results_rmse.columns[best_l1_rmse[0]]}")
